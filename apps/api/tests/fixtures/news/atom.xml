@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>Example</title>
+  <entry>
+    <id>atom-1</id>
+    <title>Asteria expands</title>
+    <link href="https://news.example.com/article/1" />
+    <summary>Asteria opened an office.</summary>
+    <updated>2026-07-10T09:00:00Z</updated>
+  </entry>
+</feed>

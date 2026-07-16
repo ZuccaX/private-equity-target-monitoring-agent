@@ -1,0 +1,5 @@
+[
+  {"seed_id":"run-high","company_domain":"asteria.example","overall_score":91,"status":"completed","model_name":"local-fallback","fallback_reason":"llm_not_configured","draft_status":"pending_approval"},
+  {"seed_id":"run-medium","company_domain":"boreal.example","overall_score":64,"status":"completed","model_name":"local-fallback","fallback_reason":"mcp_timeout","draft_status":"revision_requested"},
+  {"seed_id":"run-low","company_domain":"cinder.example","overall_score":28,"status":"completed","model_name":"local-fallback","fallback_reason":"llm_not_configured","draft_status":"rejected"}
+]

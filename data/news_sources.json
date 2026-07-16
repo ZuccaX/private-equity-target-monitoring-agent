@@ -1,0 +1,12 @@
+{
+  "sources": [
+    {
+      "source_id": "demo_mock",
+      "adapter": "mock",
+      "enabled": true,
+      "fixture_path": "news_sync_items.json",
+      "reliability": 0.85,
+      "language": "en"
+    }
+  ]
+}

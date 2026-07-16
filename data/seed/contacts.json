@@ -1,0 +1,8 @@
+[
+  {"external_id":"m2-contact-1","company_domain":"asteria.example","full_name":"Alice Martin","job_title":"CEO","email":"alice@asteria.example","relationship_strength":4},
+  {"external_id":"m2-contact-2","company_domain":"boreal.example","full_name":"Bjorn Lind","job_title":"CFO","email":"bjorn@boreal.example","relationship_strength":3},
+  {"external_id":"m2-contact-3","company_domain":"cinder.example","full_name":"Carla Ruiz","job_title":"Chair","email":"carla@cinder.example","relationship_strength":1},
+  {"external_id":"m2-contact-4","company_domain":"delta.example","full_name":"Daniel Weber","job_title":"Founder","email":"daniel@delta.example","relationship_strength":4},
+  {"external_id":"m2-contact-5","company_domain":"esker.example","full_name":"Emma Jones","job_title":"CEO","email":"emma@esker.example","relationship_strength":2},
+  {"external_id":"m2-contact-6","company_domain":"fjord.example","full_name":"Freja Olsen","job_title":"Owner","email":"freja@fjord.example","relationship_strength":2}
+]

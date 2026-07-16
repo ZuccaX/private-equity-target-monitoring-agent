@@ -1,0 +1,29 @@
+[
+  {
+    "source_item_id": "m3-asteria-expansion",
+    "company_domain": "asteria.example",
+    "title": "Asteria opens a new French office",
+    "summary": "Asteria HealthCloud expanded into Lyon on 2026-07-10.",
+    "url": "https://news.example/m3/asteria-expansion",
+    "published_at": "2026-07-10T09:00:00Z",
+    "language": "en"
+  },
+  {
+    "source_item_id": "m3-esker-customer-loss",
+    "company_domain": "esker.example",
+    "title": "Esker loses a major logistics customer",
+    "summary": "Esker Logistics said its largest customer will not renew the contract.",
+    "url": "https://news.example/m3/esker-customer-loss",
+    "published_at": "2026-07-11T10:00:00Z",
+    "language": "en"
+  },
+  {
+    "source_item_id": "m3-fjord-routine-update",
+    "company_domain": "fjord.example",
+    "title": "Fjord updates office handbook",
+    "summary": "Fjord Specialty Services published a routine policy update.",
+    "url": "https://news.example/m3/fjord-routine-update",
+    "published_at": "2026-07-12T08:00:00Z",
+    "language": "en"
+  }
+]

@@ -1,0 +1,4 @@
+[
+  {"seed_id":"mandate-tech","name":"European Software Growth","description":"Recurring-revenue European software.","target_sectors":["Healthcare Software","B2B Software","Logistics Software"],"target_countries":["France","Sweden","United Kingdom"],"is_active":true},
+  {"seed_id":"mandate-industrial","name":"Industrial and Services","description":"European industrial technology and services.","target_sectors":["Industrial Technology","Business Services"],"target_countries":["Germany","Norway"],"is_active":true}
+]

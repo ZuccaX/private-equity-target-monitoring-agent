@@ -1,3 +1,24 @@
+# Repository-local artifacts
+.DS_Store
+._*
+.idea/
+.vscode/
+.codex/
+.agents/
+/output/
+*.log
+*.sqlite
+*.sqlite3
+*.db
+*.pem
+*.key
+*.p12
+*.pfx
+*.safetensors
+pytorch_model*.bin
+*.onnx
+huggingface/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
@@ -25,6 +46,10 @@ share/python-wheels/
 .installed.cfg
 *.egg
 MANIFEST
+
+# The Python template's broad lib/ rule must not hide frontend source.
+!apps/web/src/lib/
+!apps/web/src/lib/**
 
 # PyInstaller
 #   Usually these files are written by a python script from a template
@@ -147,8 +172,10 @@ activemq-data/
 # SageMath parsed files
 *.sage.py
 
-# Environments
+# Environments. Keep only the public template tracked.
 .env
+.env.*
+!.env.example
 .envrc
 .venv
 env/

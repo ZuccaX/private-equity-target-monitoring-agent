@@ -1,0 +1,4 @@
+[
+  {"seed_id":"approval-medium","run_seed_id":"run-medium","decision":"revision_requested","comment":"Revise the evidence and tone."},
+  {"seed_id":"approval-low","run_seed_id":"run-low","decision":"rejected","comment":"Outside mandate."}
+]

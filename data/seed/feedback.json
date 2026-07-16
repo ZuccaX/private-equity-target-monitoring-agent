@@ -1,0 +1,5 @@
+[
+  {"seed_id":"feedback-1","company_domain":"asteria.example","run_seed_id":"run-high","feedback_type":"rag_relevance","rating":5,"is_helpful":true,"comment":"Evidence was relevant."},
+  {"seed_id":"feedback-2","company_domain":"boreal.example","run_seed_id":"run-medium","feedback_type":"score_quality","rating":3,"is_helpful":true,"comment":"Score needs nuance."},
+  {"seed_id":"feedback-3","company_domain":"esker.example","feedback_type":"trigger_accuracy","rating":5,"is_helpful":true,"comment":"Customer loss correctly flagged."}
+]

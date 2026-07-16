@@ -1,0 +1,8 @@
+[
+  {"seed_id":"company-high","name":"Asteria HealthCloud","domain":"asteria.example","sector":"Healthcare Software","country":"France","status":"active","pipeline_stage":"qualified","mandate_seed_id":"mandate-tech","description":"High-fit recurring-revenue healthcare platform."},
+  {"seed_id":"company-medium","name":"Boreal Data Systems","domain":"boreal.example","sector":"B2B Software","country":"Sweden","status":"active","pipeline_stage":"screening","mandate_seed_id":"mandate-tech","description":"Medium-fit data infrastructure vendor."},
+  {"seed_id":"company-low","name":"Cinder Consumer Group","domain":"cinder.example","sector":"Consumer Retail","country":"Spain","status":"monitoring","pipeline_stage":"monitoring","mandate_seed_id":"mandate-industrial","description":"Low-fit cyclical retailer."},
+  {"seed_id":"company-industrial","name":"Delta Automation","domain":"delta.example","sector":"Industrial Technology","country":"Germany","status":"active","pipeline_stage":"triggered","mandate_seed_id":"mandate-industrial","description":"Industrial automation growth case."},
+  {"seed_id":"company-negative","name":"Esker Logistics","domain":"esker.example","sector":"Logistics Software","country":"United Kingdom","status":"monitoring","pipeline_stage":"monitoring","mandate_seed_id":"mandate-tech","description":"Mixed case with a negative customer-loss trigger."},
+  {"seed_id":"company-empty","name":"Fjord Specialty Services","domain":"fjord.example","sector":"Business Services","country":"Norway","status":"active","pipeline_stage":"sourced","mandate_seed_id":"mandate-industrial","description":"Three-document deterministic RAG type-mismatch case."}
+]

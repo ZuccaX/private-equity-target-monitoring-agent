@@ -1,0 +1,22 @@
+services:
+  api:
+    environment:
+      EMBEDDING_PROVIDER: sentence_transformer
+      HF_MODEL_CACHE_DIR: /models/huggingface
+      SEED_DATA_DIR: /seed-data
+      RETRIEVAL_EVALUATION_FIXTURE: /evaluation-fixtures/retrieval_evaluation.json
+      HF_HUB_OFFLINE: ${HF_HUB_OFFLINE:-1}
+      TRANSFORMERS_OFFLINE: ${TRANSFORMERS_OFFLINE:-1}
+    volumes:
+      - type: bind
+        source: ${HF_MODEL_CACHE_DIR:?HF_MODEL_CACHE_DIR is required}
+        target: /models/huggingface
+        read_only: true
+      - type: bind
+        source: ./data/seed
+        target: /seed-data
+        read_only: true
+      - type: bind
+        source: ./apps/api/tests/fixtures
+        target: /evaluation-fixtures
+        read_only: true

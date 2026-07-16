@@ -1,0 +1,14 @@
+[
+  {"external_id":"m2-interaction-01","company_domain":"asteria.example","contact_external_id":"m2-contact-1","interaction_type":"meeting","direction":"outbound","summary":"Discussed growth financing.","occurred_at":"2026-05-01T10:00:00+00:00"},
+  {"external_id":"m2-interaction-02","company_domain":"asteria.example","contact_external_id":"m2-contact-1","interaction_type":"email","direction":"inbound","summary":"Shared retention metrics.","occurred_at":"2026-05-08T10:00:00+00:00"},
+  {"external_id":"m2-interaction-03","company_domain":"boreal.example","contact_external_id":"m2-contact-2","interaction_type":"call","direction":"outbound","summary":"Introductory call.","occurred_at":"2026-05-02T10:00:00+00:00"},
+  {"external_id":"m2-interaction-04","company_domain":"boreal.example","contact_external_id":"m2-contact-2","interaction_type":"email","direction":"inbound","summary":"Received product deck.","occurred_at":"2026-05-09T10:00:00+00:00"},
+  {"external_id":"m2-interaction-05","company_domain":"cinder.example","contact_external_id":"m2-contact-3","interaction_type":"call","direction":"outbound","summary":"Discussed retail outlook.","occurred_at":"2026-05-03T10:00:00+00:00"},
+  {"external_id":"m2-interaction-06","company_domain":"cinder.example","contact_external_id":"m2-contact-3","interaction_type":"note","direction":"inbound","summary":"Leverage remains high.","occurred_at":"2026-05-10T10:00:00+00:00"},
+  {"external_id":"m2-interaction-07","company_domain":"delta.example","contact_external_id":"m2-contact-4","interaction_type":"meeting","direction":"outbound","summary":"Factory visit planned.","occurred_at":"2026-05-04T10:00:00+00:00"},
+  {"external_id":"m2-interaction-08","company_domain":"delta.example","contact_external_id":"m2-contact-4","interaction_type":"email","direction":"inbound","summary":"Backlog data received.","occurred_at":"2026-05-11T10:00:00+00:00"},
+  {"external_id":"m2-interaction-09","company_domain":"esker.example","contact_external_id":"m2-contact-5","interaction_type":"call","direction":"outbound","summary":"Customer concentration reviewed.","occurred_at":"2026-05-05T10:00:00+00:00"},
+  {"external_id":"m2-interaction-10","company_domain":"esker.example","contact_external_id":"m2-contact-5","interaction_type":"email","direction":"inbound","summary":"Loss mitigation plan shared.","occurred_at":"2026-05-12T10:00:00+00:00"},
+  {"external_id":"m2-interaction-11","company_domain":"fjord.example","contact_external_id":"m2-contact-6","interaction_type":"meeting","direction":"outbound","summary":"Initial owner meeting.","occurred_at":"2026-05-06T10:00:00+00:00"},
+  {"external_id":"m2-interaction-12","company_domain":"fjord.example","contact_external_id":"m2-contact-6","interaction_type":"note","direction":"inbound","summary":"Tax documents only.","occurred_at":"2026-05-13T10:00:00+00:00"}
+]

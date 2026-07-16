@@ -1,0 +1,1858 @@
+
+
+===== FILE: app/agents/origination_workflow.py =====
+
+from dataclasses import dataclass
+
+from app.models.company import Company
+from app.models.contact import Contact
+from app.models.crm_interaction import CRMInteraction
+from app.models.trigger import Trigger
+from app.services.email_generation_service import (
+    EmailDraftContent,
+    EmailGenerationService,
+)
+from app.services.scoring_service import (
+    ScoreBreakdown,
+    ScoringService,
+)
+
+
+@dataclass
+class OriginationWorkflowResult:
+    score: ScoreBreakdown
+    email_draft: EmailDraftContent
+    output_summary: str
+
+
+class OriginationWorkflow:
+    def __init__(
+        self,
+        scoring_service: ScoringService | None = None,
+        email_generation_service: EmailGenerationService | None = None,
+    ) -> None:
+        self.scoring_service = (
+            scoring_service
+            or ScoringService()
+        )
+
+        self.email_generation_service = (
+            email_generation_service
+            or EmailGenerationService()
+        )
+
+    def run(
+        self,
+        company: Company,
+        triggers: list[Trigger] | None = None,
+        contacts: list[Contact] | None = None,
+        interactions: list[CRMInteraction] | None = None,
+    ) -> OriginationWorkflowResult:
+        normalized_triggers = triggers or []
+        normalized_contacts = contacts or []
+        normalized_interactions = interactions or []
+
+        score = self.scoring_service.score_company(
+            company=company,
+            triggers=normalized_triggers,
+            contacts=normalized_contacts,
+            interactions=normalized_interactions,
+        )
+
+        email_draft = (
+            self.email_generation_service
+            .generate_outreach_draft(
+                company=company,
+                score=score,
+                triggers=normalized_triggers,
+                contacts=normalized_contacts,
+                interactions=normalized_interactions,
+            )
+        )
+
+        output_summary = (
+            f"Generated CRM and trigger-aware priority score "
+            f"{score.overall_score} and email draft for "
+            f"{company.name} using "
+            f"{len(normalized_triggers)} trigger(s), "
+            f"{len(normalized_contacts)} contact(s), and "
+            f"{len(normalized_interactions)} interaction(s)."
+        )
+
+        return OriginationWorkflowResult(
+            score=score,
+            email_draft=email_draft,
+            output_summary=output_summary,
+        )
+
+===== FILE: app/services/agent_run_service.py =====
+
+from datetime import datetime, timezone
+
+from sqlalchemy.orm import Session
+
+from app.agents.origination_workflow import OriginationWorkflow
+from app.models.agent_run import AgentRun
+from app.models.audit_log import AuditLog
+from app.models.email_draft import EmailDraft
+from app.models.priority_score import PriorityScore
+from app.repositories.agent_run_repository import (
+    AgentRunRepository,
+)
+from app.repositories.audit_log_repository import (
+    AuditLogRepository,
+)
+from app.repositories.company_repository import (
+    CompanyRepository,
+)
+from app.repositories.contact_repository import (
+    ContactRepository,
+)
+from app.repositories.crm_interaction_repository import (
+    CRMInteractionRepository,
+)
+from app.repositories.email_draft_repository import (
+    EmailDraftRepository,
+)
+from app.repositories.priority_score_repository import (
+    PriorityScoreRepository,
+)
+from app.repositories.trigger_repository import (
+    TriggerRepository,
+)
+from app.schemas.agent_run import (
+    AgentRunDetail,
+    AgentRunRead,
+    AgentRunSummary,
+)
+from app.schemas.email_draft import EmailDraftRead
+from app.schemas.priority_score import PriorityScoreRead
+
+
+class AgentRunService:
+    def __init__(
+        self,
+        db: Session,
+    ) -> None:
+        self.db = db
+
+        self.company_repository = (
+            CompanyRepository(db)
+        )
+
+        self.agent_run_repository = (
+            AgentRunRepository(db)
+        )
+
+        self.priority_score_repository = (
+            PriorityScoreRepository(db)
+        )
+
+        self.email_draft_repository = (
+            EmailDraftRepository(db)
+        )
+
+        self.audit_log_repository = (
+            AuditLogRepository(db)
+        )
+
+        self.trigger_repository = (
+            TriggerRepository(db)
+        )
+
+        self.contact_repository = (
+            ContactRepository(db)
+        )
+
+        self.crm_interaction_repository = (
+            CRMInteractionRepository(db)
+        )
+
+        self.origination_workflow = (
+            OriginationWorkflow()
+        )
+
+    def list_agent_runs(
+        self,
+    ) -> list[AgentRunSummary]:
+        agent_runs = (
+            self.agent_run_repository
+            .list_all()
+        )
+
+        summaries: list[AgentRunSummary] = []
+
+        for agent_run in agent_runs:
+            company = (
+                self.company_repository
+                .get_by_id(agent_run.company_id)
+            )
+
+            priority_score = (
+                self.priority_score_repository
+                .get_by_agent_run_id(
+                    agent_run.id
+                )
+            )
+
+            email_draft = (
+                self.email_draft_repository
+                .get_by_agent_run_id(
+                    agent_run.id
+                )
+            )
+
+            summaries.append(
+                AgentRunSummary(
+                    id=agent_run.id,
+                    company_id=agent_run.company_id,
+                    company_name=(
+                        company.name
+                        if company is not None
+                        else "Unknown"
+                    ),
+                    run_type=agent_run.run_type,
+                    status=agent_run.status,
+                    overall_score=(
+                        priority_score.overall_score
+                        if priority_score is not None
+                        else None
+                    ),
+                    email_draft_id=(
+                        email_draft.id
+                        if email_draft is not None
+                        else None
+                    ),
+                    email_draft_status=(
+                        email_draft.status
+                        if email_draft is not None
+                        else None
+                    ),
+                    completed_at=agent_run.completed_at,
+                    created_at=agent_run.created_at,
+                )
+            )
+
+        return summaries
+
+    def run_agent_for_company(
+        self,
+        company_id: int,
+    ) -> AgentRunDetail:
+        company = (
+            self.company_repository
+            .get_by_id(company_id)
+        )
+
+        if company is None:
+            raise ValueError(
+                f"Company not found: {company_id}"
+            )
+
+        triggers = (
+            self.trigger_repository
+            .list_by_company_id(company.id)
+        )
+
+        contacts = (
+            self.contact_repository
+            .list_by_company_id(company.id)
+        )
+
+        interactions = (
+            self.crm_interaction_repository
+            .list_by_company_id(company.id)
+        )
+
+        now = datetime.now(timezone.utc)
+
+        agent_run = AgentRun(
+            company_id=company.id,
+            run_type="full_workflow",
+            status="running",
+            workflow_version="v3-crm-trigger-aware",
+            model_name="template-only",
+            prompt_version="v3-crm-trigger-aware",
+            input_snapshot={
+                "company_id": company.id,
+                "company_name": company.name,
+                "sector": company.sector,
+                "country": company.country,
+                "status": company.status,
+                "trigger_count": len(triggers),
+                "trigger_ids": [
+                    trigger.id
+                    for trigger in triggers
+                ],
+                "contact_count": len(contacts),
+                "contact_ids": [
+                    contact.id
+                    for contact in contacts
+                ],
+                "interaction_count": len(interactions),
+                "interaction_ids": [
+                    interaction.id
+                    for interaction in interactions
+                ],
+            },
+            started_at=now,
+        )
+
+        try:
+            self.agent_run_repository.create(
+                agent_run
+            )
+
+            workflow_result = (
+                self.origination_workflow.run(
+                    company=company,
+                    triggers=triggers,
+                    contacts=contacts,
+                    interactions=interactions,
+                )
+            )
+
+            priority_score = PriorityScore(
+                agent_run_id=agent_run.id,
+                company_id=company.id,
+                overall_score=(
+                    workflow_result
+                    .score
+                    .overall_score
+                ),
+                score_version=(
+                    workflow_result
+                    .score
+                    .score_version
+                ),
+                sector_fit_score=(
+                    workflow_result
+                    .score
+                    .sector_fit_score
+                ),
+                trigger_score=(
+                    workflow_result
+                    .score
+                    .trigger_score
+                ),
+                relationship_score=(
+                    workflow_result
+                    .score
+                    .relationship_score
+                ),
+                timing_score=(
+                    workflow_result
+                    .score
+                    .timing_score
+                ),
+                risk_score=(
+                    workflow_result
+                    .score
+                    .risk_score
+                ),
+                reasons=(
+                    workflow_result
+                    .score
+                    .reasons
+                ),
+                evidence_refs=(
+                    workflow_result
+                    .score
+                    .evidence_refs
+                ),
+            )
+
+            self.priority_score_repository.create(
+                priority_score
+            )
+
+            email_draft = EmailDraft(
+                agent_run_id=agent_run.id,
+                company_id=company.id,
+                subject=(
+                    workflow_result
+                    .email_draft
+                    .subject
+                ),
+                body=(
+                    workflow_result
+                    .email_draft
+                    .body
+                ),
+                status="pending_approval",
+                tone=(
+                    workflow_result
+                    .email_draft
+                    .tone
+                ),
+                recipient_name=(
+                    workflow_result
+                    .email_draft
+                    .recipient_name
+                ),
+                recipient_email=(
+                    workflow_result
+                    .email_draft
+                    .recipient_email
+                ),
+                generated_by=(
+                    workflow_result
+                    .email_draft
+                    .generated_by
+                ),
+                model_name=(
+                    workflow_result
+                    .email_draft
+                    .model_name
+                ),
+                prompt_version=(
+                    workflow_result
+                    .email_draft
+                    .prompt_version
+                ),
+                evidence_refs=(
+                    workflow_result
+                    .email_draft
+                    .evidence_refs
+                ),
+            )
+
+            self.email_draft_repository.create(
+                email_draft
+            )
+
+            agent_run.status = "completed"
+
+            agent_run.completed_at = (
+                datetime.now(timezone.utc)
+            )
+
+            agent_run.output_summary = (
+                workflow_result.output_summary
+            )
+
+            audit_log = AuditLog(
+                entity_type="agent_run",
+                entity_id=agent_run.id,
+                action=(
+                    "completed_crm_trigger_aware_workflow"
+                ),
+                actor_type="agent",
+                actor_name="origination-agent-v3",
+                before_data=None,
+                after_data={
+                    "company_id": company.id,
+                    "company_name": company.name,
+                    "trigger_count": len(triggers),
+                    "contact_count": len(contacts),
+                    "interaction_count": len(interactions),
+                    "priority_score_id": priority_score.id,
+                    "overall_score": (
+                        priority_score.overall_score
+                    ),
+                    "relationship_score": (
+                        priority_score.relationship_score
+                    ),
+                    "email_draft_id": email_draft.id,
+                    "recipient_name": (
+                        email_draft.recipient_name
+                    ),
+                },
+            )
+
+            self.audit_log_repository.create(
+                audit_log
+            )
+
+            self.db.commit()
+
+            self.db.refresh(agent_run)
+            self.db.refresh(priority_score)
+            self.db.refresh(email_draft)
+
+            return AgentRunDetail(
+                agent_run=AgentRunRead.model_validate(
+                    agent_run
+                ),
+                priority_score=(
+                    PriorityScoreRead.model_validate(
+                        priority_score
+                    )
+                ),
+                email_draft=(
+                    EmailDraftRead.model_validate(
+                        email_draft
+                    )
+                ),
+            )
+
+        except Exception as error:
+            self.db.rollback()
+
+            failed_run = AgentRun(
+                company_id=company.id,
+                run_type="full_workflow",
+                status="failed",
+                workflow_version=(
+                    "v3-crm-trigger-aware"
+                ),
+                model_name="template-only",
+                prompt_version=(
+                    "v3-crm-trigger-aware"
+                ),
+                input_snapshot={
+                    "company_id": company.id,
+                    "company_name": company.name,
+                    "trigger_count": len(triggers),
+                    "contact_count": len(contacts),
+                    "interaction_count": len(interactions),
+                },
+                error_message=str(error),
+                started_at=now,
+                completed_at=(
+                    datetime.now(timezone.utc)
+                ),
+            )
+
+            self.db.add(failed_run)
+            self.db.commit()
+
+            raise
+
+===== FILE: app/services/scoring_service.py =====
+
+from dataclasses import dataclass
+from datetime import datetime, timezone
+from typing import Any
+
+from app.models.company import Company
+from app.models.contact import Contact
+from app.models.crm_interaction import CRMInteraction
+from app.models.trigger import Trigger
+
+
+@dataclass
+class ScoreBreakdown:
+    overall_score: int
+    score_version: str
+    sector_fit_score: int
+    trigger_score: int
+    relationship_score: int
+    timing_score: int
+    risk_score: int
+    reasons: list[str]
+    evidence_refs: list[dict[str, Any]]
+
+
+class ScoringService:
+    def score_company(
+        self,
+        company: Company,
+        triggers: list[Trigger] | None = None,
+        contacts: list[Contact] | None = None,
+        interactions: list[CRMInteraction] | None = None,
+    ) -> ScoreBreakdown:
+        normalized_triggers = triggers or []
+        normalized_contacts = contacts or []
+        normalized_interactions = interactions or []
+
+        sector_fit_score = self._score_sector_fit(company.sector)
+
+        trigger_score = self._score_triggers(
+            normalized_triggers
+        )
+
+        relationship_score = self._score_relationship(
+            contacts=normalized_contacts,
+            interactions=normalized_interactions,
+        )
+
+        timing_score = self._score_timing(
+            normalized_triggers
+        )
+
+        risk_score = self._score_risk(company)
+
+        raw_score = (
+            sector_fit_score
+            + trigger_score
+            + relationship_score
+            + timing_score
+            - risk_score
+        )
+
+        overall_score = min(
+            100,
+            max(0, raw_score),
+        )
+
+        reasons = self._build_reasons(
+            company=company,
+            triggers=normalized_triggers,
+            contacts=normalized_contacts,
+            interactions=normalized_interactions,
+        )
+
+        evidence_refs = self._build_evidence_refs(
+            company=company,
+            triggers=normalized_triggers,
+            contacts=normalized_contacts,
+            interactions=normalized_interactions,
+        )
+
+        return ScoreBreakdown(
+            overall_score=overall_score,
+            score_version="v3-crm-trigger-aware",
+            sector_fit_score=sector_fit_score,
+            trigger_score=trigger_score,
+            relationship_score=relationship_score,
+            timing_score=timing_score,
+            risk_score=risk_score,
+            reasons=reasons,
+            evidence_refs=evidence_refs,
+        )
+
+    def _score_sector_fit(
+        self,
+        sector: str,
+    ) -> int:
+        sector_lower = sector.lower()
+
+        preferred_keywords = [
+            "data",
+            "cyber",
+            "saas",
+            "fintech",
+            "infrastructure",
+        ]
+
+        has_preferred_keyword = any(
+            keyword in sector_lower
+            for keyword in preferred_keywords
+        )
+
+        if has_preferred_keyword:
+            return 25
+
+        return 15
+
+    def _score_triggers(
+        self,
+        triggers: list[Trigger],
+    ) -> int:
+        if len(triggers) == 0:
+            return 5
+
+        trigger_weights = {
+            "market_expansion": 28,
+            "partnership": 25,
+            "product_launch": 23,
+            "customer_win": 22,
+            "leadership_change": 18,
+            "funding": 16,
+        }
+
+        best_score = 10
+
+        for trigger in triggers:
+            type_score = trigger_weights.get(
+                trigger.trigger_type,
+                10,
+            )
+
+            confidence_bonus = int(
+                trigger.confidence_score * 5
+            )
+
+            candidate_score = (
+                type_score
+                + confidence_bonus
+            )
+
+            best_score = max(
+                best_score,
+                candidate_score,
+            )
+
+        return min(best_score, 30)
+
+    def _score_relationship(
+        self,
+        contacts: list[Contact],
+        interactions: list[CRMInteraction],
+    ) -> int:
+        if len(contacts) == 0 and len(interactions) == 0:
+            return 5
+
+        strongest_relationship = max(
+            (
+                contact.relationship_strength
+                for contact in contacts
+            ),
+            default=0,
+        )
+
+        contact_component = round(
+            strongest_relationship
+            / 100
+            * 12
+        )
+
+        interaction_count_component = min(
+            len(interactions),
+            5,
+        )
+
+        recency_component = self._score_interaction_recency(
+            interactions
+        )
+
+        sentiment_component = self._score_interaction_sentiment(
+            interactions
+        )
+
+        relationship_score = (
+            3
+            + contact_component
+            + interaction_count_component
+            + recency_component
+            + sentiment_component
+        )
+
+        return min(
+            relationship_score,
+            25,
+        )
+
+    def _score_interaction_recency(
+        self,
+        interactions: list[CRMInteraction],
+    ) -> int:
+        if len(interactions) == 0:
+            return 0
+
+        latest_interaction = max(
+            interactions,
+            key=lambda interaction: interaction.occurred_at,
+        )
+
+        occurred_at = latest_interaction.occurred_at
+
+        if occurred_at.tzinfo is None:
+            occurred_at = occurred_at.replace(
+                tzinfo=timezone.utc
+            )
+
+        now = datetime.now(timezone.utc)
+
+        days_since_interaction = max(
+            0,
+            (now - occurred_at).days,
+        )
+
+        if days_since_interaction <= 30:
+            return 3
+
+        if days_since_interaction <= 90:
+            return 2
+
+        if days_since_interaction <= 180:
+            return 1
+
+        return 0
+
+    def _score_interaction_sentiment(
+        self,
+        interactions: list[CRMInteraction],
+    ) -> int:
+        if len(interactions) == 0:
+            return 0
+
+        average_sentiment = sum(
+            interaction.sentiment_score
+            for interaction in interactions
+        ) / len(interactions)
+
+        if average_sentiment >= 0.6:
+            return 2
+
+        if average_sentiment >= 0.2:
+            return 1
+
+        return 0
+
+    def _score_timing(
+        self,
+        triggers: list[Trigger],
+    ) -> int:
+        if len(triggers) == 0:
+            return 8
+
+        high_timing_trigger_types = {
+            "market_expansion",
+            "partnership",
+            "product_launch",
+            "customer_win",
+        }
+
+        has_high_timing_trigger = any(
+            trigger.trigger_type
+            in high_timing_trigger_types
+            for trigger in triggers
+        )
+
+        if has_high_timing_trigger:
+            return 18
+
+        return 12
+
+    def _score_risk(
+        self,
+        company: Company,
+    ) -> int:
+        return 0
+
+    def _build_reasons(
+        self,
+        company: Company,
+        triggers: list[Trigger],
+        contacts: list[Contact],
+        interactions: list[CRMInteraction],
+    ) -> list[str]:
+        reasons = [
+            (
+                f"{company.name} operates in "
+                f"{company.sector}, which matches "
+                "the current investment theme."
+            )
+        ]
+
+        if len(triggers) == 0:
+            reasons.append(
+                "No recent business trigger has been detected."
+            )
+        else:
+            top_trigger = triggers[0]
+
+            trigger_label = (
+                top_trigger.trigger_type
+                .replace("_", " ")
+            )
+
+            reasons.append(
+                (
+                    f"Recent {trigger_label} trigger detected: "
+                    f"{top_trigger.title}."
+                )
+            )
+
+        if len(contacts) == 0:
+            reasons.append(
+                "No CRM contact relationship is currently available."
+            )
+        else:
+            strongest_contact = max(
+                contacts,
+                key=lambda contact: contact.relationship_strength,
+            )
+
+            reasons.append(
+                (
+                    f"CRM relationship with "
+                    f"{strongest_contact.full_name} "
+                    f"has strength "
+                    f"{strongest_contact.relationship_strength}/100."
+                )
+            )
+
+        if len(interactions) == 0:
+            reasons.append(
+                "No historical CRM interaction is currently recorded."
+            )
+        else:
+            latest_interaction = max(
+                interactions,
+                key=lambda interaction: interaction.occurred_at,
+            )
+
+            reasons.append(
+                (
+                    f"Latest CRM interaction was a "
+                    f"{latest_interaction.interaction_type} "
+                    f"with sentiment score "
+                    f"{latest_interaction.sentiment_score:.2f}."
+                )
+            )
+
+        reasons.append(
+            "No major negative risk signal is present "
+            "in the current demo dataset."
+        )
+
+        return reasons
+
+    def _build_evidence_refs(
+        self,
+        company: Company,
+        triggers: list[Trigger],
+        contacts: list[Contact],
+        interactions: list[CRMInteraction],
+    ) -> list[dict[str, Any]]:
+        evidence_refs: list[dict[str, Any]] = [
+            {
+                "type": "company_profile",
+                "company_id": company.id,
+                "company_name": company.name,
+                "sector": company.sector,
+                "country": company.country,
+            }
+        ]
+
+        for trigger in triggers:
+            evidence_refs.append(
+                {
+                    "type": "trigger",
+                    "trigger_id": trigger.id,
+                    "trigger_type": trigger.trigger_type,
+                    "title": trigger.title,
+                    "confidence_score": trigger.confidence_score,
+                    "news_article_id": trigger.news_article_id,
+                }
+            )
+
+        for contact in contacts[:3]:
+            evidence_refs.append(
+                {
+                    "type": "crm_contact",
+                    "contact_id": contact.id,
+                    "full_name": contact.full_name,
+                    "job_title": contact.job_title,
+                    "relationship_strength": (
+                        contact.relationship_strength
+                    ),
+                }
+            )
+
+        for interaction in interactions[:3]:
+            evidence_refs.append(
+                {
+                    "type": "crm_interaction",
+                    "interaction_id": interaction.id,
+                    "interaction_type": (
+                        interaction.interaction_type
+                    ),
+                    "sentiment_score": (
+                        interaction.sentiment_score
+                    ),
+                    "occurred_at": (
+                        interaction.occurred_at.isoformat()
+                    ),
+                }
+            )
+
+        return evidence_refs
+
+===== FILE: app/services/email_generation_service.py =====
+
+from dataclasses import dataclass
+from typing import Any
+
+from app.models.company import Company
+from app.models.contact import Contact
+from app.models.crm_interaction import CRMInteraction
+from app.models.trigger import Trigger
+from app.services.scoring_service import ScoreBreakdown
+
+
+@dataclass
+class EmailDraftContent:
+    subject: str
+    body: str
+    tone: str
+    recipient_name: str | None
+    recipient_email: str | None
+    generated_by: str
+    model_name: str | None
+    prompt_version: str | None
+    evidence_refs: list[dict[str, Any]]
+
+
+class EmailGenerationService:
+    def generate_outreach_draft(
+        self,
+        company: Company,
+        score: ScoreBreakdown,
+        triggers: list[Trigger] | None = None,
+        contacts: list[Contact] | None = None,
+        interactions: list[CRMInteraction] | None = None,
+    ) -> EmailDraftContent:
+        normalized_triggers = triggers or []
+        normalized_contacts = contacts or []
+        normalized_interactions = interactions or []
+
+        primary_contact = self._select_primary_contact(
+            normalized_contacts
+        )
+
+        subject = self._build_subject(
+            company=company,
+            triggers=normalized_triggers,
+        )
+
+        body = self._build_body(
+            company=company,
+            triggers=normalized_triggers,
+            primary_contact=primary_contact,
+            interactions=normalized_interactions,
+        )
+
+        evidence_refs = self._build_evidence_refs(
+            company=company,
+            score=score,
+            triggers=normalized_triggers,
+            primary_contact=primary_contact,
+            interactions=normalized_interactions,
+        )
+
+        return EmailDraftContent(
+            subject=subject,
+            body=body,
+            tone="professional",
+            recipient_name=(
+                primary_contact.full_name
+                if primary_contact is not None
+                else f"{company.name} Team"
+            ),
+            recipient_email=(
+                primary_contact.email
+                if primary_contact is not None
+                else None
+            ),
+            generated_by="template-crm-trigger-aware",
+            model_name="template-only",
+            prompt_version="v3-crm-trigger-aware",
+            evidence_refs=evidence_refs,
+        )
+
+    def _select_primary_contact(
+        self,
+        contacts: list[Contact],
+    ) -> Contact | None:
+        if len(contacts) == 0:
+            return None
+
+        return max(
+            contacts,
+            key=lambda contact: contact.relationship_strength,
+        )
+
+    def _build_subject(
+        self,
+        company: Company,
+        triggers: list[Trigger],
+    ) -> str:
+        if len(triggers) == 0:
+            return (
+                f"Following {company.name}'s "
+                "recent momentum"
+            )
+
+        top_trigger = triggers[0]
+        trigger_type = top_trigger.trigger_type
+
+        if trigger_type == "market_expansion":
+            return (
+                f"Following {company.name}'s "
+                "market expansion"
+            )
+
+        if trigger_type == "partnership":
+            return (
+                f"Following {company.name}'s "
+                "recent partnership"
+            )
+
+        if trigger_type == "product_launch":
+            return (
+                f"Following {company.name}'s "
+                "new product launch"
+            )
+
+        if trigger_type == "leadership_change":
+            return (
+                "Following recent leadership news at "
+                f"{company.name}"
+            )
+
+        if trigger_type == "customer_win":
+            return (
+                f"Following {company.name}'s "
+                "recent customer momentum"
+            )
+
+        return (
+            f"Following {company.name}'s "
+            "recent momentum"
+        )
+
+    def _build_body(
+        self,
+        company: Company,
+        triggers: list[Trigger],
+        primary_contact: Contact | None,
+        interactions: list[CRMInteraction],
+    ) -> str:
+        greeting = self._build_greeting(
+            company=company,
+            primary_contact=primary_contact,
+        )
+
+        trigger_sentence = self._build_trigger_sentence(
+            company=company,
+            triggers=triggers,
+        )
+
+        relationship_sentence = (
+            self._build_relationship_sentence(
+                interactions
+            )
+        )
+
+        body_parts = [
+            greeting,
+            "",
+            trigger_sentence,
+        ]
+
+        if relationship_sentence is not None:
+            body_parts.extend(
+                [
+                    "",
+                    relationship_sentence,
+                ]
+            )
+
+        body_parts.extend(
+            [
+                "",
+                (
+                    f"Given {company.name}'s position in "
+                    f"{company.sector}, I thought it could "
+                    "be worth continuing the conversation."
+                ),
+                "",
+                "Best,",
+                "Investment Team",
+            ]
+        )
+
+        return "\n".join(body_parts)
+
+    def _build_greeting(
+        self,
+        company: Company,
+        primary_contact: Contact | None,
+    ) -> str:
+        if primary_contact is None:
+            return f"Hi {company.name} team,"
+
+        first_name = (
+            primary_contact.full_name
+            .strip()
+            .split(" ")[0]
+        )
+
+        return f"Hi {first_name},"
+
+    def _build_trigger_sentence(
+        self,
+        company: Company,
+        triggers: list[Trigger],
+    ) -> str:
+        if len(triggers) == 0:
+            return (
+                f"I have been following {company.name}'s "
+                f"work in {company.sector}."
+            )
+
+        top_trigger = triggers[0]
+
+        return (
+            "I noticed the recent development: "
+            f"{top_trigger.title}."
+        )
+
+    def _build_relationship_sentence(
+        self,
+        interactions: list[CRMInteraction],
+    ) -> str | None:
+        if len(interactions) == 0:
+            return None
+
+        latest_interaction = max(
+            interactions,
+            key=lambda interaction: interaction.occurred_at,
+        )
+
+        interaction_label = (
+            latest_interaction.interaction_type
+            .replace("_", " ")
+        )
+
+        return (
+            f"It was useful connecting during our recent "
+            f"{interaction_label}, and I wanted to follow up."
+        )
+
+    def _build_evidence_refs(
+        self,
+        company: Company,
+        score: ScoreBreakdown,
+        triggers: list[Trigger],
+        primary_contact: Contact | None,
+        interactions: list[CRMInteraction],
+    ) -> list[dict[str, Any]]:
+        evidence_refs: list[dict[str, Any]] = [
+            {
+                "type": "priority_score",
+                "overall_score": score.overall_score,
+                "relationship_score": (
+                    score.relationship_score
+                ),
+                "score_version": score.score_version,
+            },
+            {
+                "type": "company_profile",
+                "company_id": company.id,
+                "company_name": company.name,
+            },
+        ]
+
+        if primary_contact is not None:
+            evidence_refs.append(
+                {
+                    "type": "crm_contact",
+                    "contact_id": primary_contact.id,
+                    "full_name": primary_contact.full_name,
+                    "job_title": primary_contact.job_title,
+                    "relationship_strength": (
+                        primary_contact.relationship_strength
+                    ),
+                }
+            )
+
+        if len(interactions) > 0:
+            latest_interaction = max(
+                interactions,
+                key=lambda interaction: interaction.occurred_at,
+            )
+
+            evidence_refs.append(
+                {
+                    "type": "crm_interaction",
+                    "interaction_id": latest_interaction.id,
+                    "interaction_type": (
+                        latest_interaction.interaction_type
+                    ),
+                    "occurred_at": (
+                        latest_interaction.occurred_at.isoformat()
+                    ),
+                    "sentiment_score": (
+                        latest_interaction.sentiment_score
+                    ),
+                }
+            )
+
+        for trigger in triggers:
+            evidence_refs.append(
+                {
+                    "type": "trigger",
+                    "trigger_id": trigger.id,
+                    "trigger_type": trigger.trigger_type,
+                    "title": trigger.title,
+                    "news_article_id": trigger.news_article_id,
+                }
+            )
+
+        return evidence_refs
+
+===== FILE: app/services/rag_retrieval_service.py =====
+
+from sqlalchemy.orm import Session
+
+from app.schemas.vector_search import (
+    RAGRetrievalResponse,
+    VectorSearchRequest,
+)
+from app.services.vector_search_service import (
+    VectorSearchService,
+)
+
+
+class RAGRetrievalService:
+    def __init__(self, db: Session) -> None:
+        self.vector_search_service = (
+            VectorSearchService(db)
+        )
+
+    def retrieve(
+        self,
+        request: VectorSearchRequest,
+    ) -> RAGRetrievalResponse:
+        search_response = (
+            self.vector_search_service.search(
+                request
+            )
+        )
+
+        context_blocks: list[str] = []
+
+        for source_number, result in enumerate(
+            search_response.results,
+            start=1,
+        ):
+            source_header = (
+                f"[Source {source_number}]\n"
+                f"Document: {result.document_title}\n"
+                f"Document ID: {result.document_id}\n"
+                f"Document Type: {result.document_type}\n"
+                f"Source System: {result.source_system}\n"
+                f"Source Path: "
+                f"{result.source_path or 'N/A'}\n"
+                f"Chunk Index: {result.chunk_index}\n"
+                f"Similarity: "
+                f"{result.similarity:.4f}"
+            )
+
+            context_block = (
+                f"{source_header}\n\n"
+                f"{result.chunk_text}"
+            )
+
+            context_blocks.append(context_block)
+
+        if context_blocks:
+            context = "\n\n---\n\n".join(
+                context_blocks
+            )
+        else:
+            context = (
+                "No relevant internal document "
+                "context was found."
+            )
+
+        return RAGRetrievalResponse(
+            query=search_response.query,
+            company_id=search_response.company_id,
+            top_k=search_response.top_k,
+            result_count=search_response.result_count,
+            context=context,
+            sources=search_response.results,
+        )
+
+===== FILE: app/services/vector_search_service.py =====
+
+from sqlalchemy.orm import Session
+
+from app.repositories.document_chunk_repository import (
+    DocumentChunkRepository,
+)
+from app.schemas.vector_search import (
+    VectorSearchRequest,
+    VectorSearchResponse,
+    VectorSearchResultRead,
+)
+from app.services.embedding_service import (
+    EmbeddingService,
+)
+
+
+class VectorSearchService:
+    def __init__(
+        self,
+        db: Session,
+        embedding_service: EmbeddingService | None = None,
+    ) -> None:
+        self.document_chunk_repository = (
+            DocumentChunkRepository(db)
+        )
+
+        self.embedding_service = (
+            embedding_service
+            or EmbeddingService()
+        )
+
+    def search(
+        self,
+        request: VectorSearchRequest,
+    ) -> VectorSearchResponse:
+        query_embedding = (
+            self.embedding_service.embed_text(
+                request.query
+            )
+        )
+
+        if not any(query_embedding):
+            raise ValueError(
+                "Query did not contain searchable terms."
+            )
+
+        rows = (
+            self.document_chunk_repository.search_similar(
+                query_embedding=query_embedding,
+                top_k=request.top_k,
+                embedding_model=(
+                    self.embedding_service.model_name
+                ),
+                company_id=request.company_id,
+            )
+        )
+
+        results: list[VectorSearchResultRead] = []
+
+        for (
+            document_chunk,
+            document,
+            distance,
+        ) in rows:
+            similarity = 1.0 - distance
+
+            normalized_similarity = max(
+                -1.0,
+                min(1.0, similarity),
+            )
+
+            result = VectorSearchResultRead(
+                chunk_id=document_chunk.id,
+                document_id=document.id,
+                company_id=document_chunk.company_id,
+                document_title=document.title,
+                document_type=document.document_type,
+                source_system=document.source_system,
+                source_path=document.source_path,
+                chunk_index=document_chunk.chunk_index,
+                chunk_text=document_chunk.chunk_text,
+                token_count=document_chunk.token_count,
+                embedding_model=(
+                    document_chunk.embedding_model
+                ),
+                distance=round(distance, 6),
+                similarity=round(
+                    normalized_similarity,
+                    6,
+                ),
+            )
+
+            results.append(result)
+
+        return VectorSearchResponse(
+            query=request.query,
+            company_id=request.company_id,
+            top_k=request.top_k,
+            result_count=len(results),
+            results=results,
+        )
+
+===== FILE: app/schemas/vector_search.py =====
+
+from pydantic import BaseModel, Field, field_validator
+
+
+class VectorSearchRequest(BaseModel):
+    query: str = Field(
+        min_length=1,
+        max_length=2000,
+    )
+
+    company_id: int | None = Field(
+        default=None,
+        ge=1,
+    )
+
+    top_k: int = Field(
+        default=5,
+        ge=1,
+        le=20,
+    )
+
+    @field_validator("query")
+    @classmethod
+    def validate_query(cls, value: str) -> str:
+        normalized_value = value.strip()
+
+        if normalized_value == "":
+            raise ValueError("Query cannot be empty.")
+
+        return normalized_value
+
+
+class VectorSearchResultRead(BaseModel):
+    chunk_id: int
+    document_id: int
+    company_id: int
+
+    document_title: str
+    document_type: str
+
+    source_system: str
+    source_path: str | None
+
+    chunk_index: int
+    chunk_text: str
+    token_count: int
+
+    embedding_model: str
+
+    distance: float
+    similarity: float
+
+
+class VectorSearchResponse(BaseModel):
+    query: str
+    company_id: int | None
+    top_k: int
+    result_count: int
+    results: list[VectorSearchResultRead]
+
+
+class RAGRetrievalResponse(BaseModel):
+    query: str
+    company_id: int | None
+    top_k: int
+    result_count: int
+    context: str
+    sources: list[VectorSearchResultRead]
+
+===== FILE: app/api/routes_agent_runs.py =====
+
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
+
+from app.core.database import get_db
+from app.schemas.agent_run import AgentRunDetail, AgentRunSummary
+from app.services.agent_run_service import AgentRunService
+
+
+router = APIRouter(
+    prefix="/api/agent-runs",
+    tags=["agent-runs"],
+)
+
+
+@router.get("", response_model=list[AgentRunSummary])
+def list_agent_runs(
+    db: Session = Depends(get_db),
+) -> list[AgentRunSummary]:
+    service = AgentRunService(db)
+
+    return service.list_agent_runs()
+
+
+@router.post("/{company_id}", response_model=AgentRunDetail)
+def run_agent_for_company(
+    company_id: int,
+    db: Session = Depends(get_db),
+) -> AgentRunDetail:
+    service = AgentRunService(db)
+
+    try:
+        return service.run_agent_for_company(company_id)
+
+    except ValueError as error:
+        raise HTTPException(
+            status_code=404,
+            detail=str(error),
+        ) from error
+
+===== FILE: app/repositories/agent_run_repository.py =====
+
+from sqlalchemy.orm import Session
+
+from app.models.agent_run import AgentRun
+
+
+class AgentRunRepository:
+    def __init__(self, db: Session) -> None:
+        self.db = db
+
+    def list_all(self) -> list[AgentRun]:
+        return (
+            self.db.query(AgentRun)
+            .order_by(AgentRun.created_at.desc())
+            .all()
+        )
+
+    def get_by_id(self, agent_run_id: int) -> AgentRun | None:
+        return (
+            self.db.query(AgentRun)
+            .filter(AgentRun.id == agent_run_id)
+            .first()
+        )
+
+    def create(self, agent_run: AgentRun) -> AgentRun:
+        self.db.add(agent_run)
+        self.db.flush()
+
+        return agent_run
+
+===== FILE: app/models/agent_run.py =====
+
+from datetime import datetime, timezone
+from typing import Any
+
+from sqlalchemy import DateTime, ForeignKey, String, Text
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.orm import Mapped, mapped_column
+
+from app.core.database import Base
+from app.models.mixins import TimestampMixin
+
+
+class AgentRun(TimestampMixin, Base):
+    __tablename__ = "agent_runs"
+
+    id: Mapped[int] = mapped_column(
+        primary_key=True,
+        index=True,
+    )
+
+    company_id: Mapped[int] = mapped_column(
+        ForeignKey("companies.id"),
+        nullable=False,
+        index=True,
+    )
+
+    run_type: Mapped[str] = mapped_column(
+        String(50),
+        default="full_workflow",
+        nullable=False,
+    )
+
+    status: Mapped[str] = mapped_column(
+        String(50),
+        default="pending",
+        nullable=False,
+        index=True,
+    )
+
+    workflow_version: Mapped[str] = mapped_column(
+        String(50),
+        default="v1",
+        nullable=False,
+    )
+
+    model_name: Mapped[str | None] = mapped_column(
+        String(100),
+        nullable=True,
+    )
+
+    prompt_version: Mapped[str | None] = mapped_column(
+        String(50),
+        nullable=True,
+    )
+
+    input_snapshot: Mapped[dict[str, Any]] = mapped_column(
+        JSONB,
+        default=dict,
+        nullable=False,
+    )
+
+    output_summary: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    error_message: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    started_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=True,
+    )
+
+    completed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+===== FILE: app/models/priority_score.py =====
+
+from typing import Any
+
+from sqlalchemy import CheckConstraint, ForeignKey, Integer, String
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.orm import Mapped, mapped_column
+
+from app.core.database import Base
+from app.models.mixins import TimestampMixin
+
+
+class PriorityScore(TimestampMixin, Base):
+    __tablename__ = "priority_scores"
+
+    __table_args__ = (
+        CheckConstraint(
+            "overall_score >= 0 AND overall_score <= 100",
+            name="ck_priority_scores_overall_score_range",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(
+        primary_key=True,
+        index=True,
+    )
+
+    agent_run_id: Mapped[int] = mapped_column(
+        ForeignKey("agent_runs.id"),
+        nullable=False,
+        index=True,
+    )
+
+    company_id: Mapped[int] = mapped_column(
+        ForeignKey("companies.id"),
+        nullable=False,
+        index=True,
+    )
+
+    overall_score: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+    )
+
+    score_version: Mapped[str] = mapped_column(
+        String(50),
+        default="v1",
+        nullable=False,
+    )
+
+    sector_fit_score: Mapped[int] = mapped_column(
+        Integer,
+        default=0,
+        nullable=False,
+    )
+
+    trigger_score: Mapped[int] = mapped_column(
+        Integer,
+        default=0,
+        nullable=False,
+    )
+
+    relationship_score: Mapped[int] = mapped_column(
+        Integer,
+        default=0,
+        nullable=False,
+    )
+
+    timing_score: Mapped[int] = mapped_column(
+        Integer,
+        default=0,
+        nullable=False,
+    )
+
+    risk_score: Mapped[int] = mapped_column(
+        Integer,
+        default=0,
+        nullable=False,
+    )
+
+    reasons: Mapped[list[str]] = mapped_column(
+        JSONB,
+        default=list,
+        nullable=False,
+    )
+
+    evidence_refs: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSONB,
+        default=list,
+        nullable=False,
+    )
+
+===== FILE: app/models/email_draft.py =====
+
+from typing import Any
+
+from sqlalchemy import ForeignKey, String, Text
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.orm import Mapped, mapped_column
+
+from app.core.database import Base
+from app.models.mixins import SoftDeleteMixin, TimestampMixin
+
+
+class EmailDraft(TimestampMixin, SoftDeleteMixin, Base):
+    __tablename__ = "email_drafts"
+
+    id: Mapped[int] = mapped_column(
+        primary_key=True,
+        index=True,
+    )
+
+    agent_run_id: Mapped[int] = mapped_column(
+        ForeignKey("agent_runs.id"),
+        nullable=False,
+        index=True,
+    )
+
+    company_id: Mapped[int] = mapped_column(
+        ForeignKey("companies.id"),
+        nullable=False,
+        index=True,
+    )
+
+    subject: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+    )
+
+    body: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+    )
+
+    status: Mapped[str] = mapped_column(
+        String(50),
+        default="pending_approval",
+        nullable=False,
+        index=True,
+    )
+
+    tone: Mapped[str] = mapped_column(
+        String(50),
+        default="professional",
+        nullable=False,
+    )
+
+    recipient_name: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+    )
+
+    recipient_email: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+    )
+
+    generated_by: Mapped[str] = mapped_column(
+        String(50),
+        default="template",
+        nullable=False,
+    )
+
+    model_name: Mapped[str | None] = mapped_column(
+        String(100),
+        nullable=True,
+    )
+
+    prompt_version: Mapped[str | None] = mapped_column(
+        String(50),
+        nullable=True,
+    )
+
+    evidence_refs: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSONB,
+        default=list,
+        nullable=False,
+    )

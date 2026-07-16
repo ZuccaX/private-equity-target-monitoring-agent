@@ -1,0 +1,6 @@
+-r requirements.txt
+-r requirements-semantic.txt
+
+httpx2==2.5.0
+pytest==9.1.1
+pytest-cov==7.1.0

@@ -1,0 +1,5 @@
+[
+  {"case_id":"asteria-retention","query":"recurring revenue retention","company_domain":"asteria.example","expected_documents":["m2-doc-01"],"forbidden_documents":["m2-doc-09","m2-doc-15"],"allowed_types":["investment_memo","financial_model"],"top_k":5,"minimum_similarity":-1.0,"expect_empty":false,"expect_warning":null},
+  {"case_id":"asteria-injection","query":"management expansion strategy","company_domain":"asteria.example","expected_documents":["m2-doc-03"],"forbidden_documents":["m2-doc-15"],"allowed_types":["management_presentation"],"top_k":3,"minimum_similarity":-1.0,"expect_empty":false,"expect_warning":"prompt_injection_pattern_isolated"},
+  {"case_id":"fjord-type-empty","query":"investment thesis","company_domain":"fjord.example","expected_documents":[],"forbidden_documents":["m2-doc-01","m2-doc-16","m2-doc-17","m2-doc-18"],"allowed_types":["investment_memo"],"top_k":5,"minimum_similarity":-1.0,"expect_empty":true,"expect_warning":null}
+]

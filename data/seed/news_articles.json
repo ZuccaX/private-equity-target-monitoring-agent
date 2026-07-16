@@ -1,0 +1,21 @@
+[
+  {"external_id":"m2-news-01","company_domain":"asteria.example","title":"Asteria wins hospital network","summary":"Asteria expands in France.","url":"https://news.example/01","source":"mock_news"},
+  {"external_id":"m2-news-02","company_domain":"asteria.example","title":"Asteria retention rises","summary":"Net retention reaches 118 percent.","url":"https://news.example/02","source":"mock_news"},
+  {"external_id":"m2-news-03","company_domain":"asteria.example","title":"Asteria appoints CFO","summary":"Experienced software CFO joins.","url":"https://news.example/03","source":"mock_news"},
+  {"external_id":"m2-news-04","company_domain":"boreal.example","title":"Boreal launches platform","summary":"New data platform released.","url":"https://news.example/04","source":"mock_news"},
+  {"external_id":"m2-news-05","company_domain":"boreal.example","title":"Boreal enters Denmark","summary":"Nordic expansion continues.","url":"https://news.example/05","source":"mock_news"},
+  {"external_id":"m2-news-06","company_domain":"boreal.example","title":"Boreal faces competition","summary":"Hyperscaler pricing pressure grows.","url":"https://news.example/06","source":"mock_news"},
+  {"external_id":"m2-news-07","company_domain":"cinder.example","title":"Cinder closes stores","summary":"Ten stores will close.","url":"https://news.example/07","source":"mock_news"},
+  {"external_id":"m2-news-08","company_domain":"cinder.example","title":"Cinder debt rises","summary":"Leverage increases.","url":"https://news.example/08","source":"mock_news"},
+  {"external_id":"m2-news-09","company_domain":"cinder.example","title":"Cinder changes chair","summary":"New chair appointed.","url":"https://news.example/09","source":"mock_news"},
+  {"external_id":"m2-news-10","company_domain":"delta.example","title":"Delta backlog record","summary":"Backlog reaches a record.","url":"https://news.example/10","source":"mock_news"},
+  {"external_id":"m2-news-11","company_domain":"delta.example","title":"Delta opens factory","summary":"German production expands.","url":"https://news.example/11","source":"mock_news"},
+  {"external_id":"m2-news-12","company_domain":"delta.example","title":"Delta service growth","summary":"Service mix increases.","url":"https://news.example/12","source":"mock_news"},
+  {"external_id":"m2-news-13","company_domain":"esker.example","title":"Esker loses major customer","summary":"Largest customer will not renew.","url":"https://news.example/13","source":"mock_news"},
+  {"external_id":"m2-news-14","company_domain":"esker.example","title":"Esker launches mitigation plan","summary":"Sales diversification begins.","url":"https://news.example/14","source":"mock_news"},
+  {"external_id":"m2-news-15","company_domain":"esker.example","title":"Esker renews lender facility","summary":"Liquidity remains available.","url":"https://news.example/15","source":"mock_news"},
+  {"external_id":"m2-news-16","company_domain":"fjord.example","title":"Fjord files accounts","summary":"Annual accounts filed.","url":"https://news.example/16","source":"mock_news"},
+  {"external_id":"m2-news-17","company_domain":"fjord.example","title":"Fjord renews lease","summary":"Warehouse lease renewed.","url":"https://news.example/17","source":"mock_news"},
+  {"external_id":"m2-news-18","company_domain":"fjord.example","title":"Fjord updates handbook","summary":"Employment policy updated.","url":"https://news.example/18","source":"mock_news"},
+  {"external_id":"m2-news-01","company_domain":"asteria.example","title":"Asteria wins hospital network","summary":"Duplicate syndicated input.","url":"https://syndicated.example/duplicate","source":"mock_news"}
+]

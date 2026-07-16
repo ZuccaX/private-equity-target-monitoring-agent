@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Example</title>
+    <item>
+      <guid>rss-1</guid>
+      <title>Asteria expands</title>
+      <link>https://news.example.com/article/1</link>
+      <description><![CDATA[<p>Asteria opened an office.</p>]]></description>
+      <pubDate>Fri, 10 Jul 2026 09:00:00 GMT</pubDate>
+    </item>
+  </channel>
+</rss>

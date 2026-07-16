@@ -1,0 +1,8 @@
+[
+  {"seed_id":"trigger-1","company_domain":"asteria.example","trigger_type":"commercial_win","title":"Hospital network win","confidence_score":0.94,"is_negative":false},
+  {"seed_id":"trigger-2","company_domain":"boreal.example","trigger_type":"product_launch","title":"New data platform","confidence_score":0.82,"is_negative":false},
+  {"seed_id":"trigger-3","company_domain":"cinder.example","trigger_type":"restructuring","title":"Store closures","confidence_score":0.91,"is_negative":true},
+  {"seed_id":"trigger-4","company_domain":"delta.example","trigger_type":"growth","title":"Record backlog","confidence_score":0.95,"is_negative":false},
+  {"seed_id":"trigger-5","company_domain":"esker.example","trigger_type":"customer_loss","title":"Major customer loss","confidence_score":0.97,"is_negative":true},
+  {"seed_id":"trigger-6","company_domain":"fjord.example","trigger_type":"filing","title":"Annual accounts filed","confidence_score":0.70,"is_negative":false}
+]
