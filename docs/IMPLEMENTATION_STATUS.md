@@ -462,7 +462,9 @@ Checkpoint failures were diagnosed and rerun rather than waived:
   API/CLI actions, and dedicated sync UI belongs to Milestone 7.
 - Negative triggers are now reliable downstream inputs, but risk weights and
   recommendation effects remain Milestone 6 scope.
-- CI exists but GitHub Actions was not executed in this local checkpoint.
+- The first public GitHub Actions run is documented below. Its frontend job
+  passed; the sole backend failure was a test-only interpreter-path portability
+  defect, not an M3 runtime or database failure.
 - MCP and LangGraph are not part of the verified public M3 runtime. Local M4
   work remains checkpoint-incomplete and excluded from this snapshot.
 
@@ -485,9 +487,9 @@ Checkpoint failures were diagnosed and rerun rather than waived:
   sanitized snapshot commit before push.
 - **History policy:** the existing `origin/main` remains unchanged and becomes
   the parent of the sanitized snapshot; no force-push is required.
-- **History outcome:** `origin/main..HEAD` contains exactly one sanitized M3
-  snapshot commit whose parent is the unchanged public `origin/main`; a normal
-  push is sufficient and no force-push is required.
+- **History outcome at initial publication:** `origin/main..HEAD` contained
+  exactly one sanitized M3 snapshot commit whose parent was the unchanged
+  public `origin/main`; the snapshot was pushed normally without a force-push.
 - **Clean-snapshot gate:** the first complete gate ran from a detached worktree
   at the exact snapshot commit, without reading the developer `.env`. Required
   skip count is zero.
@@ -511,3 +513,44 @@ build was denied permission to bind Turbopack's internal temporary port; the
 identical authorized build outside that sandbox passed. Neither failure was a
 source-code or test failure. The complete gate is rerun after the evidence-only
 amend so the final commit, rather than its predecessor, is the validated object.
+
+## Public CI interpreter compatibility repair
+
+- **GitHub run:** CI run `29468355778`, commit `3725a23`, backend job
+  `87526247253`.
+- **Observed result:** frontend passed; backend dependency installation,
+  PostgreSQL service setup and compilation passed; pytest reported 153 passes
+  and one failure.
+- **Sole failure:**
+  `tests/integration/news/test_cli.py::test_cli_entrypoints_expose_safe_persisted_scope_only`.
+  The test hard-coded `apps/api/.venv/bin/python`, but `actions/setup-python`
+  supplies an active interpreter without creating a repository-local `.venv`.
+- **Repair:** both CLI subprocess probes now use `sys.executable`, so they use
+  the same interpreter that launched pytest. No workflow, dependency, runtime
+  behavior, API contract or database schema changed.
+- **Isolation:** the candidate gate ran from detached commit `746d58f` and first
+  executed the affected test while that worktree had no `.venv`; the dependency
+  link was added only after the targeted portability assertion passed.
+
+### CI repair candidate checkpoint
+
+Required skip count is zero. The two dedicated candidate databases were created
+only after confirming both names were absent and were removed by the cleanup
+trap. The real developer `.env` was not read.
+
+| Command or check | Result | Pass / fail / skip | Notes |
+|---|---|---:|---|
+| External active interpreter, no worktree `.venv`: `python -m pytest tests/integration/news/test_cli.py::test_cli_entrypoints_expose_safe_persisted_scope_only -q` | Pass | 1 / 0 / 0 | Reproduces the GitHub directory condition; both CLI help probes succeeded |
+| `.venv/bin/python -m compileall -q app scripts alembic tests` | Pass | 1 / 0 / 0 | Exact candidate source/tests compiled |
+| `.venv/bin/python -m pytest --cov=app --cov-report=term-missing -q` | Pass | 154 / 0 / 0 | Complete M3 backend regression; 89% line coverage (3945 statements, 420 missed) |
+| `make lint`; `pnpm exec tsc --noEmit`; `pnpm build` | Pass | 3 / 0 / 0 | Backend compile and ESLint clean; TypeScript passed; 12/12 routes generated |
+| `docker compose --env-file /dev/null config --quiet` | Pass | 1 / 0 / 0 | Compose defaults validated without loading `.env` |
+| Exact OID, three-path allowlist, forbidden-M4-path, secret/private-key and `git diff --check` gate | Pass | 7 / 0 / 0 | Candidate contains only the test, reviewed design and implementation plan |
+| Candidate database cleanup assertion | Pass | 1 / 0 / 0 | Both repair-specific database names absent after the gate |
+
+No Alembic migration was introduced, so a new migration matrix is not
+applicable. Existing migration integration tests are included in the complete
+154-test regression. This evidence-only amend is followed by a fresh detached
+worktree and a complete rerun against the amended final commit; no tracked
+change follows that final gate. The corrected GitHub Actions result remains
+pending until the owner pushes the verified repair commit.

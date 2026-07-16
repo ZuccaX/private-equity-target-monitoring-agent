@@ -1,4 +1,5 @@
 import subprocess
+import sys
 from pathlib import Path
 
 
@@ -8,7 +9,7 @@ API_ROOT = Path(__file__).resolve().parents[3]
 def test_cli_entrypoints_expose_safe_persisted_scope_only() -> None:
     sync = subprocess.run(
         [
-            str(API_ROOT / ".venv" / "bin" / "python"),
+            sys.executable,
             "-m",
             "scripts.sync_news",
             "--help",
@@ -20,7 +21,7 @@ def test_cli_entrypoints_expose_safe_persisted_scope_only() -> None:
     )
     extract = subprocess.run(
         [
-            str(API_ROOT / ".venv" / "bin" / "python"),
+            sys.executable,
             "-m",
             "scripts.extract_triggers",
             "--help",
